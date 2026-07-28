@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: platform-limits
+  namespace: "{{ platform_namespace }}"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: "{{ platform_default_request_cpu }}"
+        memory: "{{ platform_default_request_memory }}"
+      default:
+        cpu: "{{ platform_default_limit_cpu }}"
+        memory: "{{ platform_default_limit_memory }}"

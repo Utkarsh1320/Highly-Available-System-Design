@@ -1,0 +1,186 @@
+---
+# Assumes the Kubernetes cluster (control-plane + kubelet + containerd) is already
+# bootstrapped and running on this node. This role only touches OS-level concerns:
+# security patching, firewall, network hardening, and admin tooling.
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Apply available security patches
+  ansible.builtin.apt:
+    upgrade: safe
+
+- name: Check whether a reboot is required after patching
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: node_hardening_reboot_required
+
+- name: Warn if a reboot is required
+  ansible.builtin.debug:
+    msg: >-
+      A reboot is required on {{ inventory_hostname }} to complete security patching.
+      This is NOT done automatically — cordon and drain the node first
+      (kubectl cordon/drain), then reboot during a maintenance window.
+  when: node_hardening_reboot_required.stat.exists
+
+- name: Install unattended-upgrades for ongoing security patching
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+
+- name: Configure unattended-upgrades to only apply security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades-security-only
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+          "${distro_id}ESMApps:${distro_codename}-apps-security";
+          "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+    mode: "0644"
+
+- name: Enable periodic apt updates and unattended-upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+
+- name: Ensure unattended-upgrades service is enabled
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+
+- name: Install admin and security tooling
+  ansible.builtin.apt:
+    name:
+      - curl
+      - jq
+      - unzip
+      - fail2ban
+      - auditd
+    state: present
+
+- name: Ensure fail2ban and auditd are enabled
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - fail2ban
+    - auditd
+
+- name: Add Kubernetes apt GPG key (for kubectl admin tooling only)
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_series }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+    force: false
+
+- name: Add Kubernetes apt repository (for kubectl admin tooling only)
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_series }}/deb/ /"
+    filename: kubernetes
+    state: present
+
+- name: Install kubectl (matching the cluster's Kubernetes series)
+  ansible.builtin.apt:
+    name: "kubectl={{ kubernetes_apt_version }}"
+    state: present
+    update_cache: true
+
+- name: Hold kubectl at installed version
+  ansible.builtin.dpkg_selections:
+    name: kubectl
+    selection: hold
+
+- name: Install Helm
+  ansible.builtin.unarchive:
+    src: "https://get.helm.sh/helm-v{{ helm_version }}-linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: /tmp/linux-amd64/helm
+
+- name: Place Helm binary on PATH
+  ansible.builtin.copy:
+    src: /tmp/linux-amd64/helm
+    dest: /usr/local/bin/helm
+    mode: "0755"
+    remote_src: true
+
+- name: Configure sysctl params to harden node network stack
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/98-security-hardening.conf
+    content: |
+      net.ipv4.conf.all.accept_redirects    = 0
+      net.ipv4.conf.all.send_redirects      = 0
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.icmp_echo_ignore_broadcasts  = 1
+      net.ipv4.tcp_syncookies                = 1
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Re-assert sysctl params required for pod networking (drift protection)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-kubernetes-cri.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Set default ufw policy to deny incoming
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set default ufw policy to allow outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: limit
+    port: "{{ ssh_port }}"
+    proto: tcp
+
+- name: Allow Kubernetes API server on control-plane nodes
+  community.general.ufw:
+    rule: allow
+    port: "6443"
+    proto: tcp
+    src: "{{ cluster_cidr }}"
+  when: "'control_plane' in group_names"
+
+- name: Allow kubelet API from within the cluster network
+  community.general.ufw:
+    rule: allow
+    port: "10250"
+    proto: tcp
+    src: "{{ cluster_cidr }}"
+
+- name: Allow NodePort range on worker nodes
+  community.general.ufw:
+    rule: allow
+    port: "30000:32767"
+    proto: tcp
+  when: "'workers' in group_names"
+
+- name: Enable ufw
+  community.general.ufw:
+    state: enabled

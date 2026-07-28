@@ -1,0 +1,99 @@
+---
+# Assumes the target cluster already exists with an Nginx ingress controller
+# configured (per the assignment brief). This role configures the platform layer
+# on top of it: namespace guardrails, RBAC for developers, and default-deny
+# NetworkPolicies scoped down to only what the app actually needs.
+
+- name: Ensure platform namespace exists
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'namespace.yaml.j2') | from_yaml }}"
+
+- name: Apply ResourceQuota
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'resourcequota.yaml.j2') | from_yaml }}"
+
+- name: Apply LimitRange
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'limitrange.yaml.j2') | from_yaml }}"
+
+- name: Apply default-deny NetworkPolicy
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-default-deny.yaml.j2') | from_yaml }}"
+
+- name: Allow DNS egress
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-allow-dns.yaml.j2') | from_yaml }}"
+
+- name: Allow ingress from the Nginx ingress controller namespace
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-allow-ingress-nginx.yaml.j2') | from_yaml }}"
+
+- name: Apply developer Role
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'rbac-developer-role.yaml.j2') | from_yaml }}"
+
+- name: Apply developer RoleBinding
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'rbac-developer-rolebinding.yaml.j2') | from_yaml }}"
+
+- name: Check whether metrics-server is already installed
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: metrics-server
+    namespace: kube-system
+    context: "{{ kube_context }}"
+  register: cluster_platform_metrics_server
+
+- name: Install metrics-server (required for the app's HorizontalPodAutoscaler)
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    src: "{{ metrics_server_manifest_url }}"
+  when: cluster_platform_metrics_server.resources | length == 0
+
+- name: Patch metrics-server for kubelet TLS used by local/kind clusters
+  kubernetes.core.k8s_json_patch:
+    kind: Deployment
+    name: metrics-server
+    namespace: kube-system
+    context: "{{ kube_context }}"
+    patch:
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --kubelet-insecure-tls
+  when:
+    - cluster_platform_metrics_server.resources | length == 0
+    - cluster_platform_kubelet_insecure_tls | bool
+
+- name: Verify the Nginx ingress controller assumed by the brief is actually present
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: ingress-nginx-controller
+    namespace: "{{ ingress_nginx_namespace }}"
+    context: "{{ kube_context }}"
+  register: cluster_platform_ingress_nginx
+
+- name: Fail fast if the assumed Nginx ingress controller is missing
+  ansible.builtin.fail:
+    msg: >-
+      No ingress-nginx-controller Deployment found in namespace
+      {{ ingress_nginx_namespace }} on context {{ kube_context }}.
+      The assignment assumes this is already configured — install it before
+      re-running this playbook.
+  when: cluster_platform_ingress_nginx.resources | length == 0

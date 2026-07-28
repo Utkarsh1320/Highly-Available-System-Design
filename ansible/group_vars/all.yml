@@ -1,0 +1,30 @@
+---
+# --- node_hardening ---
+kubernetes_series: "1.34"
+kubernetes_apt_version: "1.34.0-*"
+helm_version: "3.15.3"
+ssh_port: 22
+# CIDR allowed to reach the API server / kubelet API. Tighten this to your
+# actual VPC/private subnet range in a real deployment.
+cluster_cidr: "10.0.0.0/8"
+
+# --- cluster_platform ---
+platform_namespace: app
+platform_app_port: 3000
+platform_developer_group: "platform-developers"
+ingress_nginx_namespace: ingress-nginx
+metrics_server_manifest_url: "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+# Only needed for local kind clusters, whose kubelet certs aren't signed for
+# metrics-server's default validation. Leave false for real production clusters.
+cluster_platform_kubelet_insecure_tls: false
+
+platform_quota_requests_cpu: "2"
+platform_quota_requests_memory: "2Gi"
+platform_quota_limits_cpu: "4"
+platform_quota_limits_memory: "4Gi"
+platform_quota_max_pods: "20"
+
+platform_default_request_cpu: "50m"
+platform_default_request_memory: "64Mi"
+platform_default_limit_cpu: "200m"
+platform_default_limit_memory: "128Mi"

@@ -1,0 +1,12 @@
+---
+- name: Harden and patch existing Kubernetes cluster nodes
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - node_hardening
+
+- name: Configure the platform layer on the existing cluster
+  hosts: local
+  become: false
+  roles:
+    - cluster_platform

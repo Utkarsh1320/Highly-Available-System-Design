@@ -62,6 +62,8 @@ spec:
             failureThreshold: 3
           securityContext:
             runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
