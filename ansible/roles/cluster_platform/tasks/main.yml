@@ -40,6 +40,12 @@
     context: "{{ kube_context }}"
     definition: "{{ lookup('template', 'networkpolicy-allow-ingress-nginx.yaml.j2') | from_yaml }}"
 
+- name: Allow ingress from the monitoring namespace (Prometheus scraping /metrics)
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-allow-monitoring.yaml.j2') | from_yaml }}"
+
 - name: Apply developer Role
   kubernetes.core.k8s:
     state: present
@@ -67,6 +73,19 @@
     src: "{{ metrics_server_manifest_url }}"
   when: cluster_platform_metrics_server.resources | length == 0
 
+# Re-check regardless of whether we just installed it above or it already
+# existed (e.g. installed manually, or by a previous run against a cluster
+# with cluster_platform_kubelet_insecure_tls unset at the time) — either way
+# it needs this flag to actually work against kind's self-signed kubelet certs.
+- name: Re-check metrics-server args after ensuring it exists
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: metrics-server
+    namespace: kube-system
+    context: "{{ kube_context }}"
+  register: cluster_platform_metrics_server_current
+  when: cluster_platform_kubelet_insecure_tls | bool
+
 - name: Patch metrics-server for kubelet TLS used by local/kind clusters
   kubernetes.core.k8s_json_patch:
     kind: Deployment
@@ -78,8 +97,10 @@
         path: /spec/template/spec/containers/0/args/-
         value: --kubelet-insecure-tls
   when:
-    - cluster_platform_metrics_server.resources | length == 0
     - cluster_platform_kubelet_insecure_tls | bool
+    - >-
+      '--kubelet-insecure-tls' not in
+      cluster_platform_metrics_server_current.resources[0].spec.template.spec.containers[0].args
 
 - name: Verify the Nginx ingress controller assumed by the brief is actually present
   kubernetes.core.k8s_info:

@@ -9,10 +9,9 @@ labels:
       cluster: hot
     includeSelectors: false
 
-images:
-  - name: ha-app
-    newTag: local
-
 patches:
   - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: ha-app
   - path: configmap-patch.yaml

@@ -13,10 +13,12 @@ platform_namespace: app
 platform_app_port: 3000
 platform_developer_group: "platform-developers"
 ingress_nginx_namespace: ingress-nginx
+monitoring_namespace: monitoring
 metrics_server_manifest_url: "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
-# Only needed for local kind clusters, whose kubelet certs aren't signed for
-# metrics-server's default validation. Leave false for real production clusters.
-cluster_platform_kubelet_insecure_tls: false
+# cluster_platform_kubelet_insecure_tls default lives in
+# roles/cluster_platform/defaults/main.yml, not here — see the comment there
+# for why (variable precedence: this file would silently defeat inventory
+# file overrides).
 
 platform_quota_requests_cpu: "2"
 platform_quota_requests_memory: "2Gi"

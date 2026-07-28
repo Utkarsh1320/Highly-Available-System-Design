@@ -1,0 +1,8 @@
+---
+# Role defaults have the LOWEST variable precedence in Ansible, which is
+# exactly what we want here: an inventory file's [all:vars] (e.g.
+# inventory/hot/hosts.ini setting this to true for kind) must be able to
+# override this safe default. Do NOT move this into group_vars/all.yml —
+# playbook group_vars has HIGHER precedence than inventory file group vars
+# and would silently defeat the per-inventory override.
+cluster_platform_kubelet_insecure_tls: false
