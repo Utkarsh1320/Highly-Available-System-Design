@@ -4,6 +4,16 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
+# --- test stage: full deps (incl. dev) + source, runs the test suite ---
+FROM node:20-alpine AS test
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY src ./src
+COPY test ./test
+COPY eslint.config.js ./
+CMD ["npm", "test"]
+
 # --- runtime stage: minimal image with just what's needed to run ---
 FROM node:20-alpine AS runtime
 WORKDIR /app

@@ -4,9 +4,14 @@
   "private": true,
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test test/",
+    "lint": "eslint ."
   },
   "dependencies": {
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "eslint": "^9.9.0"
   }
 }
