@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ha-app-config
+data:
+  CLUSTER_ROLE: "standby"
+  CLUSTER_NAME: "kind-standby"

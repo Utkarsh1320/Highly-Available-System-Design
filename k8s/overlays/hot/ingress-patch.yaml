@@ -1,0 +1,7 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ha-app
+spec:
+  rules:
+    - host: ha-app.hot.local

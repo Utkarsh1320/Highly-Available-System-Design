@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: app
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: ha-app
+      app.kubernetes.io/part-of: high-availability-assignment
+    includeSelectors: true
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - ingress.yaml
+
+images:
+  - name: ha-app
+    newName: docker.io/utkarsh1320/ha-app
+    newTag: local

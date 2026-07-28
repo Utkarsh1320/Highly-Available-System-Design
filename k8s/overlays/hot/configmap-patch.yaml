@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ha-app-config
+data:
+  CLUSTER_ROLE: "hot"
+  CLUSTER_NAME: "kind-hot"
