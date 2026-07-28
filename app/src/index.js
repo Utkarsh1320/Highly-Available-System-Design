@@ -9,6 +9,21 @@ let isReady = false;
 
 app.use(requestCounter);
 
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  res.on("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+    logger[level]("request", {
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Math.round(durationMs * 100) / 100,
+    });
+  });
+  next();
+});
+
 app.get("/healthz", (req, res) => {
   res.status(200).json({ status: "ok" });
 });

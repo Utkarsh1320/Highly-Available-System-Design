@@ -14,6 +14,8 @@ module.exports = [
         console: "readonly",
         fetch: "readonly",
         __dirname: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
       },
     },
     rules: {

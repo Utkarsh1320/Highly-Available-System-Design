@@ -21,4 +21,4 @@ resources:
 images:
   - name: ha-app
     newName: docker.io/utkarsh1320/ha-app
-    newTag: v1
+    newTag: v2
