@@ -1,8 +1,5 @@
 ---
-# Assumes the Kubernetes cluster (control-plane + kubelet + containerd) is already
-# bootstrapped and running on this node. This role only touches OS-level concerns:
-# security patching, firewall, network hardening, and admin tooling.
-
+# Node hardening tasks
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true

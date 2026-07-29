@@ -7,7 +7,7 @@ labels:
   - pairs:
       app.kubernetes.io/name: ha-app
       app.kubernetes.io/part-of: high-availability-assignment
-    includeSelectors: true
+    includeSelectors: false
 
 resources:
   - namespace.yaml
@@ -17,6 +17,7 @@ resources:
   - hpa.yaml
   - pdb.yaml
   - ingress.yaml
+  - networkpolicy.yaml
 
 images:
   - name: ha-app

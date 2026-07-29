@@ -2,9 +2,11 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-from-ingress-nginx
-  namespace: "{{ platform_namespace }}"
+  namespace: "{{ monitoring_namespace }}"
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
   policyTypes:
     - Ingress
   ingress:
@@ -14,4 +16,4 @@ spec:
               kubernetes.io/metadata.name: "{{ ingress_nginx_namespace }}"
       ports:
         - protocol: TCP
-          port: {{ platform_app_port }}
+          port: 3000

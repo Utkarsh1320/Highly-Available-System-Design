@@ -1,8 +1,4 @@
 ---
-# Assumes the target cluster already exists with an Nginx ingress controller
-# configured (per the assignment brief). This role configures the platform layer
-# on top of it: namespace guardrails, RBAC for developers, and default-deny
-# NetworkPolicies scoped down to only what the app actually needs.
 
 - name: Ensure platform namespace exists
   kubernetes.core.k8s:
@@ -22,29 +18,61 @@
     context: "{{ kube_context }}"
     definition: "{{ lookup('template', 'limitrange.yaml.j2') | from_yaml }}"
 
-- name: Apply default-deny NetworkPolicy
-  kubernetes.core.k8s:
-    state: present
-    context: "{{ kube_context }}"
-    definition: "{{ lookup('template', 'networkpolicy-default-deny.yaml.j2') | from_yaml }}"
 
-- name: Allow DNS egress
+- name: Ensure monitoring namespace exists
   kubernetes.core.k8s:
     state: present
     context: "{{ kube_context }}"
-    definition: "{{ lookup('template', 'networkpolicy-allow-dns.yaml.j2') | from_yaml }}"
+    definition: "{{ lookup('template', 'monitoring-namespace.yaml.j2') | from_yaml }}"
 
-- name: Allow ingress from the Nginx ingress controller namespace
-  kubernetes.core.k8s:
-    state: present
+- name: Look up the kube-apiserver Service (ClusterIP varies per cluster)
+  kubernetes.core.k8s_info:
+    kind: Service
+    name: kubernetes
+    namespace: default
     context: "{{ kube_context }}"
-    definition: "{{ lookup('template', 'networkpolicy-allow-ingress-nginx.yaml.j2') | from_yaml }}"
+  register: cluster_platform_apiserver_svc
 
-- name: Allow ingress from the monitoring namespace (Prometheus scraping /metrics)
+- name: Set apiserver connection facts for NetworkPolicy egress rules
+  ansible.builtin.set_fact:
+    cluster_platform_apiserver_ip: "{{ cluster_platform_apiserver_svc.resources[0].spec.clusterIP }}"
+    cluster_platform_apiserver_port: "{{ cluster_platform_apiserver_svc.resources[0].spec.ports[0].port }}"
+
+- name: Apply default-deny NetworkPolicy for the monitoring namespace
   kubernetes.core.k8s:
     state: present
     context: "{{ kube_context }}"
-    definition: "{{ lookup('template', 'networkpolicy-allow-monitoring.yaml.j2') | from_yaml }}"
+    definition: "{{ lookup('template', 'networkpolicy-monitoring-default-deny.yaml.j2') | from_yaml }}"
+
+- name: Allow DNS egress in the monitoring namespace
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-monitoring-allow-dns.yaml.j2') | from_yaml }}"
+
+- name: Allow intra-namespace traffic within monitoring (Grafana<->Prometheus/Loki, Promtail->Loki)
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-monitoring-allow-intra-namespace.yaml.j2') | from_yaml }}"
+
+- name: Allow ingress from ingress-nginx to Grafana
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-monitoring-allow-ingress-nginx.yaml.j2') | from_yaml }}"
+
+- name: Allow Prometheus egress to the app namespace for scraping
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-monitoring-allow-egress-app.yaml.j2') | from_yaml }}"
+
+- name: Allow Promtail egress to the kube-apiserver for pod discovery
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ kube_context }}"
+    definition: "{{ lookup('template', 'networkpolicy-monitoring-allow-apiserver.yaml.j2') | from_yaml }}"
 
 - name: Apply developer Role
   kubernetes.core.k8s:
@@ -73,10 +101,7 @@
     src: "{{ metrics_server_manifest_url }}"
   when: cluster_platform_metrics_server.resources | length == 0
 
-# Re-check regardless of whether we just installed it above or it already
-# existed (e.g. installed manually, or by a previous run against a cluster
-# with cluster_platform_kubelet_insecure_tls unset at the time) — either way
-# it needs this flag to actually work against kind's self-signed kubelet certs.
+
 - name: Re-check metrics-server args after ensuring it exists
   kubernetes.core.k8s_info:
     kind: Deployment
