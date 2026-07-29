@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: app
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: __SERVICE_NAME__
+    includeSelectors: false
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+
+images:
+  - name: __IMAGE__
+    newName: docker.io/__DOCKERHUB_USER__/__IMAGE__
+    newTag: v1

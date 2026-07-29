@@ -11,6 +11,7 @@ labels:
 resources:
   - namespace.yaml
   - prometheus-configmap.yaml
+  - prometheus-rbac.yaml
   - prometheus-deployment.yaml
   - prometheus-service.yaml
   - loki-configmap.yaml

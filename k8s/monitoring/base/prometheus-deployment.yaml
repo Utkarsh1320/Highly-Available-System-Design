@@ -13,7 +13,7 @@ spec:
       labels:
         app.kubernetes.io/name: prometheus
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: prometheus
       containers:
         - name: prometheus
           image: prom/prometheus:v2.53.0

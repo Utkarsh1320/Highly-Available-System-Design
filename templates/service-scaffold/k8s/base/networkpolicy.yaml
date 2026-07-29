@@ -1,0 +1,67 @@
+# Same pattern as every other service on this platform: deny by default,
+# then explicitly allow only what's actually needed. This travels with
+# your service (applied by the same kubectl apply -k that deploys it) —
+# it is NOT something the platform team edits on your behalf.
+#
+# 1. Deny everything by default.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: __SERVICE_NAME__-default-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: __SERVICE_NAME__
+  policyTypes: [Ingress, Egress]
+---
+# 2. Allow ingress-nginx (real traffic) and monitoring (Prometheus scraping
+#    your /metrics via the prometheus.io/* annotations on the Deployment).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: __SERVICE_NAME__-allow-ingress-and-metrics
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: __SERVICE_NAME__
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: __PORT__
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: __PORT__
+          protocol: TCP
+---
+# 3. Egress: DNS only by default. Add an ipBlock/namespaceSelector rule
+#    here if your service calls a database or another internal service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: __SERVICE_NAME__-allow-egress-dns
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: __SERVICE_NAME__
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

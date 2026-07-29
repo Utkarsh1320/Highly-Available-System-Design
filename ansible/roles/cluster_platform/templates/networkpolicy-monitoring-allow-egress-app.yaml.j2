@@ -10,10 +10,11 @@ spec:
   policyTypes:
     - Egress
   egress:
+    # No port restriction: Prometheus now discovers scrape targets via
+    # pod annotations (prometheus.io/scrape/port/path), so any service in
+    # the app namespace can be scraped on whatever port it declares —
+    # onboarding a new service must not require editing this policy.
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: "{{ platform_namespace }}"
-      ports:
-        - protocol: TCP
-          port: {{ platform_app_port }}

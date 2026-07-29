@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ha-app
+  name: __SERVICE_NAME__
 spec:
   replicas: 3
   strategy:
@@ -11,15 +11,15 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: ha-app
+      app.kubernetes.io/name: __SERVICE_NAME__
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: ha-app
+        app.kubernetes.io/name: __SERVICE_NAME__
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "3000"
-        prometheus.io/path: "/metrics"
+        prometheus.io/port: "__PORT__"
+        prometheus.io/path: "__METRICS_PATH__"
     spec:
       automountServiceAccountToken: false
       imagePullSecrets:
@@ -30,17 +30,17 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app.kubernetes.io/name: ha-app
+              app.kubernetes.io/name: __SERVICE_NAME__
       containers:
-        - name: ha-app
-          image: ha-app:local
+        - name: __SERVICE_NAME__
+          image: __IMAGE__:local
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 3000
+              containerPort: __PORT__
           envFrom:
             - configMapRef:
-                name: ha-app-config
+                name: __SERVICE_NAME__-config
           resources:
             requests:
               cpu: 50m
@@ -50,7 +50,7 @@ spec:
               memory: 128Mi
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: __HEALTHZ_PATH__
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -58,7 +58,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: __READYZ_PATH__
               port: http
             initialDelaySeconds: 2
             periodSeconds: 3
@@ -66,8 +66,10 @@ spec:
             failureThreshold: 3
           securityContext:
             runAsNonRoot: true
-            runAsUser: 100
-            runAsGroup: 101
+            # runAsUser/runAsGroup: <fill in your image's non-root UID/GID —
+            # e.g. `docker run --rm __IMAGE__:local id`. Without these,
+            # runAsNonRoot fails if your image's USER is a name rather than
+            # a numeric UID (kubelet can't verify non-root without one).
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
