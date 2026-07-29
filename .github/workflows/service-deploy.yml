@@ -1,0 +1,169 @@
+name: Service Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: "Name used for the k8s Deployment/Service/image (e.g. ha-app)"
+        required: true
+        type: string
+      image_name:
+        description: "Full image repo, e.g. docker.io/utkarsh1320/ha-app"
+        required: true
+        type: string
+      working_directory:
+        description: "Path to the service's source + Dockerfile"
+        required: true
+        type: string
+      k8s_overlay_hot:
+        description: "kustomize overlay path for the hot cluster"
+        required: true
+        type: string
+      k8s_overlay_standby:
+        description: "kustomize overlay path for the standby cluster"
+        required: true
+        type: string
+      healthz_path:
+        description: "Liveness path used for the post-deploy smoke test"
+        required: false
+        type: string
+        default: /healthz
+      run_tests:
+        description: "Run `npm ci && npm run lint && npm test` in working_directory before building"
+        required: false
+        type: boolean
+        default: true
+      deploy:
+        description: "Build/push the image and deploy to standby then hot. Set false for PR runs (test-only)."
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      KUBECONFIG_HOT:
+        required: true
+      KUBECONFIG_STANDBY:
+        required: true
+
+jobs:
+  test:
+    name: Test & Lint
+    if: inputs.run_tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ${{ inputs.working_directory }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+  build-and-push:
+    name: Build & Push Image
+    needs: test
+    if: inputs.deploy && always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: tag
+        run: echo "value=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (runtime target, tagged by commit SHA + latest)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.working_directory }}
+          target: runtime
+          push: true
+          tags: |
+            ${{ inputs.image_name }}:${{ steps.tag.outputs.value }}
+            ${{ inputs.image_name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-standby:
+    name: Deploy to Standby (canary)
+    needs: build-and-push
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG_STANDBY }}" | base64 -d > "$HOME/.kube/config"
+
+      - name: Apply manifests
+        run: kubectl apply -k ${{ inputs.k8s_overlay_standby }}
+
+      - name: Roll out new image
+        run: |
+          kubectl -n app set image deployment/${{ inputs.service_name }} \
+            ${{ inputs.service_name }}=${{ inputs.image_name }}:${{ needs.build-and-push.outputs.image_tag }}
+          kubectl -n app rollout status deployment/${{ inputs.service_name }} --timeout=120s
+
+      - name: Smoke test
+        run: |
+          kubectl -n app run smoke-test-standby-${{ inputs.service_name }} --rm -i --restart=Never \
+            --image=busybox:1.36 --timeout=30s -- \
+            wget -qO- --timeout=5 http://${{ inputs.service_name }}${{ inputs.healthz_path }}
+
+      - name: Roll back on failure
+        if: failure()
+        run: kubectl -n app rollout undo deployment/${{ inputs.service_name }}
+
+  deploy-hot:
+    name: Deploy to Hot
+    needs: [build-and-push, deploy-standby]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG_HOT }}" | base64 -d > "$HOME/.kube/config"
+
+      - name: Apply manifests
+        run: kubectl apply -k ${{ inputs.k8s_overlay_hot }}
+
+      - name: Roll out new image
+        run: |
+          kubectl -n app set image deployment/${{ inputs.service_name }} \
+            ${{ inputs.service_name }}=${{ inputs.image_name }}:${{ needs.build-and-push.outputs.image_tag }}
+          kubectl -n app rollout status deployment/${{ inputs.service_name }} --timeout=120s
+
+      - name: Smoke test
+        run: |
+          kubectl -n app run smoke-test-hot-${{ inputs.service_name }} --rm -i --restart=Never \
+            --image=busybox:1.36 --timeout=30s -- \
+            wget -qO- --timeout=5 http://${{ inputs.service_name }}${{ inputs.healthz_path }}
+
+      - name: Roll back on failure
+        if: failure()
+        run: kubectl -n app rollout undo deployment/${{ inputs.service_name }}

@@ -1,0 +1,31 @@
+name: __SERVICE_NAME__ CI/CD
+
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "__SOURCE_DIR__/**"
+      - ".github/workflows/__SERVICE_NAME__.yml"
+      - ".github/workflows/service-deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "__SOURCE_DIR__/**"
+      - "__K8S_DIR__/base/**"
+      - "__K8S_DIR__/overlays/**"
+      - ".github/workflows/__SERVICE_NAME__.yml"
+      - ".github/workflows/service-deploy.yml"
+
+jobs:
+  ci-cd:
+    uses: ./.github/workflows/service-deploy.yml
+    with:
+      service_name: __SERVICE_NAME__
+      image_name: docker.io/__DOCKERHUB_USER__/__IMAGE__
+      working_directory: __SOURCE_DIR__
+      k8s_overlay_hot: __K8S_DIR__/overlays/hot
+      k8s_overlay_standby: __K8S_DIR__/overlays/standby
+      healthz_path: __HEALTHZ_PATH__
+      deploy: ${{ github.event_name == 'push' }}
+    secrets: inherit

@@ -1,0 +1,30 @@
+name: ha-app CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/ha-app.yml"
+      - ".github/workflows/service-deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "k8s/base/**"
+      - "k8s/overlays/**"
+      - ".github/workflows/ha-app.yml"
+      - ".github/workflows/service-deploy.yml"
+
+jobs:
+  ci-cd:
+    uses: ./.github/workflows/service-deploy.yml
+    with:
+      service_name: ha-app
+      image_name: docker.io/utkarsh1320/ha-app
+      working_directory: app
+      k8s_overlay_hot: k8s/overlays/hot
+      k8s_overlay_standby: k8s/overlays/standby
+      healthz_path: /healthz
+      deploy: ${{ github.event_name == 'push' }}
+    secrets: inherit
