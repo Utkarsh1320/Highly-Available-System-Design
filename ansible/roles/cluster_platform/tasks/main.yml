@@ -143,3 +143,28 @@
       The assignment assumes this is already configured — install it before
       re-running this playbook.
   when: cluster_platform_ingress_nginx.resources | length == 0
+
+- name: Pin ingress-nginx-controller to the control-plane node (kind only)
+  kubernetes.core.k8s_json_patch:
+    kind: Deployment
+    name: ingress-nginx-controller
+    namespace: "{{ ingress_nginx_namespace }}"
+    context: "{{ kube_context }}"
+    patch:
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          kubernetes.io/os: linux
+          ingress-ready: "true"
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Equal
+            effect: NoSchedule
+  when:
+    - cluster_platform_pin_ingress_nginx_to_control_plane | bool
+    - cluster_platform_ingress_nginx.resources | length > 0
+    - >-
+      'ingress-ready' not in
+      (cluster_platform_ingress_nginx.resources[0].spec.template.spec.nodeSelector | default({}))

@@ -1,3 +1,5 @@
 ---
 
 cluster_platform_kubelet_insecure_tls: false
+
+cluster_platform_pin_ingress_nginx_to_control_plane: false
