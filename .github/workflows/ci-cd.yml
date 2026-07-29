@@ -1,23 +1,5 @@
 name: CI/CD
 
-# Developer workflow this is built for:
-#   1. Open a PR against main  -> "test" job runs (lint + unit tests), gates the merge.
-#   2. Merge to main           -> full pipeline: test -> build & push image ->
-#      deploy to standby (canary) -> smoke test -> deploy to hot -> smoke test.
-#
-# Deploying standby before hot is deliberate: it lets a bad release fail against
-# the passive cluster (zero customer impact) before it ever touches the live one.
-#
-# Required repo secrets:
-#   DOCKERHUB_USERNAME, DOCKERHUB_TOKEN  - push access to docker.io/<user>/ha-app
-#   KUBECONFIG_HOT, KUBECONFIG_STANDBY   - base64-encoded kubeconfig for each cluster
-#     (only needed by the deploy jobs; not required to just run tests on a PR)
-#
-# NOTE: the deploy jobs run on a self-hosted runner. GitHub-hosted runners cannot
-# reach clusters that aren't publicly exposed (e.g. local kind clusters, or
-# private-network production clusters) — register a runner on a machine that has
-# network access to kubectl and this pipeline will drive it. Docs:
-# https://docs.github.com/actions/hosting-your-own-runners
 
 on:
   pull_request:

@@ -1,3 +1,16 @@
 - op: add
   path: /spec/rules/0/host
   value: ha-app.standby.local
+- op: add
+  path: /spec/rules/-
+  value:
+    host: ha-app.local
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: ha-app
+              port:
+                name: http
