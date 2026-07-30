@@ -24,7 +24,6 @@ needed to run and onboard services onto it safely.
 - [`docs/architecture-design.md`](docs/architecture-design.md) — the design behind the diagram above, local-vs-production, cost trade-offs
 - [`docs/failover-mechanism.md`](docs/failover-mechanism.md) — how failover actually works, verified live
 - [`docs/network-and-security.md`](docs/network-and-security.md) — what's implemented vs. required for production
-- [`docs/design-decisions-qa.md`](docs/design-decisions-qa.md) — interview-style Q&A on the design decisions and trade-offs
 - [`docs/runbook.md`](docs/runbook.md) — run it locally on `kind`
 - [`docs/production-runbook.md`](docs/production-runbook.md) — deploy it for real
 
