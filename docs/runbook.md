@@ -102,6 +102,10 @@ kubectl --context kind-hot -n app rollout status deploy/ha-app --timeout=90s
 kubectl --context kind-standby -n app rollout status deploy/ha-app --timeout=90s
 ```
 
+If this fails with `dial tcp ...:443: connect: connection refused` against
+`ingress-nginx-controller-admission`, the admission webhook just isn't ready yet — wait
+~15s and re-run the same `apply -k` command.
+
 ## 6b. Onboarding a second service (optional)
 
 Don't hand-write manifests for a new service — scaffold them:
@@ -178,6 +182,15 @@ kubectl --context <ctx> -n ingress-nginx delete pod -l app.kubernetes.io/compone
 ```
 
 Wait ~20s between each and re-check `kubectl get pods -A` before moving on.
+
+If that doesn't fix it either (symptoms: `kube-proxy` looks healthy but Service routing
+is still broken, or `ingress-nginx` is `Running` but nothing is listening on host port
+80/443 even after recreating the pod), the cluster itself needs rebuilding — repeat
+steps 2 through 7 for just that one cluster (`kind delete cluster --name hot`, then
+recreate and redeploy). Nothing in that flow is special-cased for a first-time create
+vs. a rebuild — the Ansible step applies
+`cluster_platform_pin_ingress_nginx_to_control_plane` idempotently either way, no manual
+patch needed.
 
 ## CI/CD (separate from this local setup)
 
