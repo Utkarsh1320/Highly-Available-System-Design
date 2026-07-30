@@ -38,6 +38,16 @@ on:
         required: false
         type: boolean
         default: true
+      scan_severity:
+        description: "Trivy severities that count as a scan failure"
+        required: false
+        type: string
+        default: "CRITICAL,HIGH"
+      fail_on_vulnerabilities:
+        description: "Block the pipeline (no push, no deploy) if the image scan finds matching-severity CVEs"
+        required: false
+        type: boolean
+        default: true
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -52,7 +62,7 @@ jobs:
   test:
     name: Test & Lint
     if: inputs.run_tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     defaults:
       run:
         working-directory: ${{ inputs.working_directory }}
@@ -75,10 +85,13 @@ jobs:
         run: npm test
 
   build-and-push:
-    name: Build & Push Image
+    name: Build, Scan & Push Image
     needs: test
     if: inputs.deploy && always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     outputs:
       image_tag: ${{ steps.tag.outputs.value }}
     steps:
@@ -94,7 +107,59 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push (runtime target, tagged by commit SHA + latest)
+      
+      - name: Build (runtime target, local only)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.working_directory }}
+          target: runtime
+          push: false
+          load: true
+          tags: ${{ inputs.image_name }}:${{ steps.tag.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      
+      - name: Get date for Trivy DB cache key
+        id: trivy-date
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@v4
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.trivy-date.outputs.date }}
+          restore-keys: trivy-db-
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ inputs.image_name }}:${{ steps.tag.outputs.value }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: ${{ inputs.scan_severity }}
+          exit-code: "0" # never fail this step itself — the dedicated gate step below decides pass/fail
+          ignore-unfixed: true
+          cache-dir: .trivy-cache
+
+      - name: Upload scan results to the Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Fail the pipeline if the scan found matching-severity CVEs
+        if: inputs.fail_on_vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ inputs.image_name }}:${{ steps.tag.outputs.value }}
+          format: table
+          severity: ${{ inputs.scan_severity }}
+          exit-code: "1"
+          ignore-unfixed: true
+          cache-dir: .trivy-cache
+
+      - name: Push (image already scanned above)
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.working_directory }}
