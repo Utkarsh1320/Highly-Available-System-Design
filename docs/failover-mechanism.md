@@ -47,18 +47,4 @@ docker logs ha-failover --tail 3      # back to ha_app_cluster/hot
 ```
 Live view: `http://localhost:8404/`.
 
-## Where this fits in the full design
 
-This HAProxy setup **is** the regional load-balancer tier from
-`docs/architecture-design.md` — same health-check/backup logic, just one instance
-instead of the `keepalived`-backed active/backup pair per region. It proves the
-mechanism genuinely works; it does not prove LB-tier self-redundancy or cross-region
-DNS failover (Route 53), both covered in that doc instead of duplicated here.
-
-## A real bug this surfaced
-
-The upstream `kind` ingress-nginx manifest (unpinned `main` branch) was missing the
-node-pinning needed for HAProxy to reach it via host ports — invisible until this point
-because everything earlier went through `kubectl port-forward`, which routes around it.
-Fixed as an idempotent Ansible task, verified by deliberately breaking it and confirming
-Ansible re-applies the fix automatically.
