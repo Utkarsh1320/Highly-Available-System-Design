@@ -47,3 +47,21 @@ Everything above the load-balancer tier (clusters, namespaces, NetworkPolicy sha
 monitoring layout) is identical between local and production — only the LB/DNS layer and
 the data tier change, since those are the two things a single-Docker-host demo genuinely
 cannot reproduce.
+
+## Cost decisions and trade-offs
+
+| Decision | Cheaper alternative | Why not the cheaper option |
+|---|---|---|
+| Self-hosted `keepalived` + HAProxy | Cloud-managed ALB/NLB (no VIP/failover to run yourself) | Bare-metal has no managed LB at all; on cloud, the managed LB is usually the *better* choice — this pattern exists specifically for the bare-metal case, not as a cost optimization |
+| Standby at **equal** capacity to hot | Scaled-down/cold standby (fewer replicas until failover) | Chosen deliberately despite ~2x compute cost — a cold standby means HPA has to scale up *during* an active incident, adding delay exactly when it's least affordable |
+| Route53 standard health checks (30s interval) | N/A — this *is* the cheaper tier already | Fast health checks (10s) cost more per check; standard is the default here since a few extra seconds of detection time is an acceptable trade for lower cost |
+| Per-cluster Prometheus/Loki, ephemeral storage | Managed observability SaaS (Grafana Cloud, Amazon Managed Prometheus) | Cheaper to self-host at small scale; the trade-off flips at real scale, where self-hosting the aggregation tier becomes its own HA service to maintain — see `docs/design-decisions-qa.md`'s observability section |
+| Cross-region RDS: standard read replica | Aurora Global Database (faster, more automated failover) | Standard replica is cheaper but promotion is a manual/scripted step, not automatic — an explicit availability-vs-cost trade, not a default |
+| `ubuntu-slim` runner for the CI `test` job | N/A — already the cost-optimized choice | `build-and-push` must stay on standard `ubuntu-latest`, since `ubuntu-slim` can't run Docker-in-Docker — the cheaper runner is only usable where the job's actual requirements allow it |
+| Self-managed nodes + `node_hardening` Ansible role | EKS/GKE managed node groups | Self-managed is cheaper per-node but shifts patching/hardening work onto you; `node_hardening` exists specifically to carry that cost in engineering time instead of cloud premium |
+
+The general pattern: every trade-off above was made deliberately, not defaulted to —
+each row picks availability/speed over cost in the places that matter most during an
+actual incident (standby capacity, LB tier redundancy), and picks cost over marginal
+speed/automation everywhere the difference is small (health check interval, CI runner
+size, replica promotion).
