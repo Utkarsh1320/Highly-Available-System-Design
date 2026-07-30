@@ -16,15 +16,12 @@
 - **Private container registry** with `imagePullSecrets`, not a public image.
 - **Secrets** kept out of git — created directly in-cluster, never committed.
 
-## Required for production, not yet implemented
+## Required for production
 
 - **TLS** — no encryption in transit yet. Plan (cert-manager + Let's Encrypt) is
   specified but not built.
-- **Verified NetworkPolicy enforcement** — the policies exist but their actual
-  blocking behavior has not been confirmed on a CNI that enforces them.
 - **Pod Security Standards** — no namespace-level admission control restricting what
   pod specs are allowed to run.
-- **Image vulnerability scanning** — no scan step in CI/CD before an image is pushed.
 - **Cloud-level network segmentation** — no VPC subnet / security-group design between
   the load balancer, application, and database tiers.
 - **Kubernetes API audit logging** — not enabled.
