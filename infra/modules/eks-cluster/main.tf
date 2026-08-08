@@ -87,3 +87,14 @@ resource "aws_security_group_rule" "node_ssh_ingress" {
   security_group_id = module.eks.node_security_group_id
   description       = "SSH for Ansible node_hardening - scoped to ssh_ingress_cidr, not 0.0.0.0/0"
 }
+
+#
+resource "aws_security_group_rule" "node_nodeport_ingress" {
+  type              = "ingress"
+  from_port         = 30000
+  to_port           = 32767
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = module.eks.node_security_group_id
+  description       = "HTTP/HTTPS NodePorts for the ingress-nginx LoadBalancer Service - public by design"
+}
