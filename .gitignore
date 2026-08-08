@@ -1,2 +1,4 @@
 node_modules/
-docs/
+docs/design-decisions-qa.md
+docs/network-and-security-implementation*.md
+aws/*

@@ -174,9 +174,22 @@ jobs:
   deploy-standby:
     name: Deploy to Standby (canary)
     needs: build-and-push
-    runs-on: self-hosted
+    # Real EKS with a public API endpoint is reachable from GitHub-hosted runners —
+    # self-hosted was only needed for the local kind clusters, which aren't
+    # internet-reachable. Kept as ubuntu-latest, not -slim, since kubectl + the AWS CLI's
+    # exec-based EKS auth plugin need more than the slim runner's constraints allow.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The kubeconfig KUBECONFIG_STANDBY decodes to uses exec-based auth
+      # ("aws eks get-token"), not a static credential — so the runner needs real AWS
+      # credentials present too, not just the kubeconfig file itself.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
 
       - name: Configure kubeconfig
         run: |
@@ -205,9 +218,16 @@ jobs:
   deploy-hot:
     name: Deploy to Hot
     needs: [build-and-push, deploy-standby]
-    runs-on: self-hosted
+    # See deploy-standby's comment — real EKS public endpoint, no self-hosted runner needed.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
       - name: Configure kubeconfig
         run: |

@@ -4,3 +4,5 @@ collections:
     version: ">=3.0.0"
   - name: community.general
     version: ">=8.0.0"
+  - name: ansible.posix # firewalld module, for the Amazon Linux / RedHat node_hardening path
+    version: ">=1.5.0"
