@@ -18,6 +18,9 @@ on:
 
 jobs:
   ci-cd:
+    permissions:
+      contents: read
+      security-events: write 
     uses: ./.github/workflows/service-deploy.yml
     with:
       service_name: ha-app
