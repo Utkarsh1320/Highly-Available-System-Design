@@ -132,7 +132,7 @@ jobs:
           restore-keys: trivy-db-
 
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ inputs.image_name }}:${{ steps.tag.outputs.value }}
           format: sarif
@@ -150,7 +150,7 @@ jobs:
 
       - name: Fail the pipeline if the scan found matching-severity CVEs
         if: inputs.fail_on_vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ inputs.image_name }}:${{ steps.tag.outputs.value }}
           format: table
